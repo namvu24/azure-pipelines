@@ -1,0 +1,18 @@
+parameters:
+  - name: blobName
+    default: "blob-certificate.pfx"
+  - name: certificateFileName
+    default: "certificate.pfx"
+
+steps:
+  - task: AzurePowerShell@5
+    displayName: "Upload certificate"
+    inputs:
+      azureSubscription: "Service-Connection"
+      ScriptType: "FilePath"
+      ScriptPath: '$(Build.SourcesDirectory)\deployment\upload-script.ps1'
+      ScriptArguments: '-resourceGroupName $ENV:RGName -webAppName $ENV:AZFunctionName -slotName -webAppName $ENV:SlotName -localPath "$ENV:Build_SourcesDirectory\$ENV:CertificateBlobName" -kuduPath $ENV:CertificateFileName'
+      azurePowerShellVersion: "LatestVersion"
+    env:
+      CertificateBlobName: ${{ parameters.blobName }}
+      CertificateFileName: ${{ parameters.certificateFileName }}

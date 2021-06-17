@@ -1,0 +1,27 @@
+trigger: none
+pr: none
+schedules:
+- cron: "0 5 * * *"
+  displayName: Daily Run
+  branches:
+    include:
+    - master
+  always: true
+
+pool:
+  vmImage: windows-latest
+
+variables:
+- group: variable-group-name
+- name: variable-name
+  value: variable-value
+
+steps:
+- task: AzurePowerShell@5
+  inputs:
+    azureSubscription: 'Service-Connection'
+    ScriptType: 'InlineScript'
+    Inline: |
+      Write-Host "Azure powershell task here"
+    azurePowerShellVersion: 'LatestVersion'
+  displayName: "Azure powershell task"

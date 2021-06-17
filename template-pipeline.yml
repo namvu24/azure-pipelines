@@ -1,0 +1,16 @@
+trigger: none
+pr: none
+
+pool:
+  vmImage: windows-latest
+
+variables:
+- group: variable-group-name
+- name: variable-name
+  value: variable-value
+
+steps:
+  - template: template/deploy-steps.yml
+    parameters:
+      blobName: $(CertificatePPEBlobName)
+      certificateFileName: $(CertificateFileName)

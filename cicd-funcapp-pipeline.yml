@@ -1,0 +1,112 @@
+trigger:
+- master
+
+pr:
+- master
+
+variables:
+  BuildPlatform: 'any cpu'
+  BuildConfiguration: 'Release'
+  AZFunctionName: 'function-app'
+  RGName: 'azure-rg'
+  StagingSlotName: 'staging'
+
+stages:
+- stage: 'Build'
+  displayName: 'Build the Azure Function'
+  jobs:
+    - job: 'Build'
+      pool:
+        vmImage: 'windows-latest'
+
+      steps:
+      - task: DotNetCoreCLI@2
+        displayName: 'Restore project dependencies'
+        inputs:
+          command: 'restore'
+          projects: '*.csproj'
+          feedsToUse: 'config'
+          nugetConfigPath: './nuget.config'
+
+      - task: DotNetCoreCLI@2
+        displayName: 'Build the project - $(BuildConfiguration)'
+        inputs:
+          command: 'build'
+          arguments: '--no-restore --configuration $(BuildConfiguration)'
+          projects: '*.csproj'
+      
+      - task: DotNetCoreCLI@2
+        displayName: 'Test the project - $(BuildConfiguration)'
+        inputs:
+          command: 'test'
+          arguments: '--no-restore --configuration $(BuildConfiguration)'
+          projects: '*.csproj'
+
+      - task: DotNetCoreCLI@2
+        displayName: 'Publish the project - $(BuildConfiguration)'
+        inputs:
+          command: 'publish'
+          projects: '*.csproj'
+          publishWebProjects: false
+          arguments: '--no-build --configuration $(BuildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(BuildConfiguration)'
+          zipAfterPublish: true
+
+      - publish: '$(Build.ArtifactStagingDirectory)'
+        artifact: drop
+
+- stage: 'Staging'
+  displayName: 'Deploy to the staging environment'
+  dependsOn: Build
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'windows-latest'
+    environment: Staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - download: current
+            artifact: drop
+
+          - task: AzureFunctionApp@1
+            inputs:
+              azureSubscription: 'Service-Connection'
+              appType: 'functionApp'
+              appName: '$(AZFunctionName)'
+              deployToSlotOrASE: true
+              resourceGroupName: '$(RGName)'
+              slotName: '$(StagingSlotName)'
+              package: '$(Pipeline.Workspace)/drop/$(BuildConfiguration)/*.zip'
+              deploymentMethod: 'zipDeploy'
+
+- stage: 'Production'
+  displayName: 'Deploy to the production environment'
+  dependsOn: Build
+  condition: |
+    and
+    (
+      succeeded(),
+      eq(variables['Build.SourceBranchName'], 'master')
+    )
+  jobs:
+  - deployment: Deploy
+    pool:
+      vmImage: 'windows-latest'
+    environment: Production
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+
+          - task: AzureAppServiceManage@0
+            inputs:
+              azureSubscription: 'Service-Connection'
+              Action: 'Swap Slots'
+              WebAppName: '$(AZFunctionName)'
+              ResourceGroupName: '$(RGName)'
+              SourceSlot: '$(StagingSlotName)'
+              SwapWithProduction: true
